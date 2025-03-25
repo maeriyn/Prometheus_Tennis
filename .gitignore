@@ -1,0 +1,22 @@
+# Python virtual environment
+venv/
+# Alternative common venv names (optional)
+.venv/
+env/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE / Editor specific files (examples)
+.idea/
+.vscode/
+*.DS_Store
+
+# Secrets file
+.env
+
+# Large data files (if you ever add local ones)
+# data/large_files/
