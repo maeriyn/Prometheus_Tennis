@@ -9,8 +9,7 @@ def get_feature_stores():
     
     return {
         'h2h': feature_dir / 'head_to_head.h5',
-        'player_stats': feature_dir / 'player_stats.h5',
-        'time_stats': feature_dir / 'time_dependent.h5'
+        'player_stats': feature_dir / 'player_stats.h5'
     }
 
 def get_features_store():
@@ -126,56 +125,6 @@ def build_player_overall_stats(df):
 
     return all_stats
 
-def build_time_dependent_stats(df, window_sizes=[10, 30, 90]):
-    """Creates rolling statistics for each player over different time windows."""
-    df['tourney_date'] = pd.to_datetime(df['tourney_date'])
-    
-    # Prepare the base stats DataFrame
-    stats_dfs = []
-    for role in ['winner', 'loser']:
-        is_winner = (role == 'winner')
-        stats_df = pd.DataFrame({
-            'player_id': df[f'{role}_id'],
-            'tourney_date': df['tourney_date'],
-            'won_match': 1 if is_winner else 0,
-            'aces': df[f'{role[0]}_ace'],
-            'double_faults': df[f'{role[0]}_df'],
-            'first_serve_in': df[f'{role[0]}_1stIn'],
-            'first_serve_won': df[f'{role[0]}_1stWon'],
-            'second_serve_won': df[f'{role[0]}_2ndWon'],
-            'break_points_saved': df[f'{role[0]}_bpSaved']
-        })
-        stats_dfs.append(stats_df)
-    
-    # Combine and sort chronologically
-    all_stats = pd.concat(stats_dfs, ignore_index=True)
-    all_stats.sort_values(['player_id', 'tourney_date'], inplace=True)
-    
-    # Initialize result DataFrame
-    result = all_stats[['player_id', 'tourney_date']].copy()
-    
-    # Calculate rolling stats for each window size
-    for window in window_sizes:
-        grouped = all_stats.groupby('player_id')
-        roll = grouped.rolling(window=f'{window}D', on='tourney_date', min_periods=1)
-        
-        # Add stats for this window
-        stats_dict = {
-            f'matches_played_{window}d': roll['won_match'].count(),
-            f'win_rate_{window}d': roll['won_match'].mean(),
-            f'avg_aces_{window}d': roll['aces'].mean(),
-            f'avg_dfs_{window}d': roll['double_faults'].mean(),
-            f'first_serve_pct_{window}d': roll['first_serve_in'].mean(),
-            f'first_serve_won_pct_{window}d': roll['first_serve_won'].mean(),
-            f'second_serve_won_pct_{window}d': roll['second_serve_won'].mean(),
-            f'break_points_saved_pct_{window}d': roll['break_points_saved'].mean()
-        }
-        
-        for col, values in stats_dict.items():
-            result[col] = values.reset_index(level=0, drop=True)
-    
-    return result
-
 def build_all_features(df, force_recompute=False):
     """
     Main function to build all feature sets.
@@ -185,7 +134,7 @@ def build_all_features(df, force_recompute=False):
         force_recompute: If True, recomputes all features even if cached
         
     Returns:
-        Tuple of (h2h_features, player_overall_stats, time_dependent_stats)
+        Tuple of (h2h_features, player_overall_stats)
     """
     stores = get_feature_stores()
     
@@ -210,10 +159,4 @@ def build_all_features(df, force_recompute=False):
             player_stats = player_stats.reset_index().rename(columns={'index': 'player_id'})
             store.put('/features', player_stats)
     
-    # Handle time-dependent stats (always recomputed)
-    print("Building time-dependent performance statistics...")
-    time_stats = build_time_dependent_stats(df)
-    with pd.HDFStore(stores['time_stats']) as store:
-        store.put('/features', time_stats)
-    
-    return h2h_features, player_stats, time_stats
+    return h2h_features, player_stats
