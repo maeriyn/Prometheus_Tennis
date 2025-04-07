@@ -85,15 +85,15 @@ def main():
     try:
         from src.features.build_features import build_all_features
         
-        h2h_features, time_features = build_all_features(cleaned_df)
+        h2h_features, player_stats = build_all_features(cleaned_df)
         
         print("\n--- Feature Statistics ---")
         print(f"Head-to-head pairs created: {len(h2h_features):,}")
-        print(f"Career statistics created for {len(time_features):,} players")
+        print(f"Career statistics created for {len(player_stats):,} players")
         
         # Save features for later use
-        h2h_features.to_csv(os.path.join(config.PROCESSED_DATA_DIR, 'head_to_head_features.csv'), index=False)
-        time_features.to_csv(os.path.join(config.PROCESSED_DATA_DIR, 'player_career_features.csv'), index=False)
+        h2h_features.to_csv(os.path.join(config.PROCESSED_DATA_DIR, 'head_to_head_with_names.csv'), index=False)
+        player_stats.to_csv(os.path.join(config.PROCESSED_DATA_DIR, 'player_career_stats_with_names.csv'), index=False)
         
     except Exception as e:
         print(f"ERROR: Feature engineering failed. Error: {e}", file=sys.stderr)

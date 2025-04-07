@@ -34,6 +34,12 @@ def build_head_to_head_features(df):
     Returns:
         DataFrame with one row per unique player pair and their matchup statistics
     """
+    # Create player name lookup first
+    name_lookup = pd.concat([
+        df[['winner_id', 'winner_name']].rename(columns={'winner_id': 'player_id', 'winner_name': 'name'}),
+        df[['loser_id', 'loser_name']].rename(columns={'loser_id': 'player_id', 'loser_name': 'name'})
+    ]).drop_duplicates('player_id').set_index('player_id')['name']
+    
     # Create lists of all matchups
     matchups = []
     for _, row in df.iterrows():
@@ -64,6 +70,10 @@ def build_head_to_head_features(df):
     h2h_stats['p1_win_pct'] = h2h_stats['p1_wins'] / h2h_stats['total_matches']
     h2h_stats['p2_win_pct'] = h2h_stats['p2_wins'] / h2h_stats['total_matches']
     
+    # Add player names using the lookup
+    h2h_stats['player1_name'] = h2h_stats['player1_id'].map(name_lookup)
+    h2h_stats['player2_name'] = h2h_stats['player2_id'].map(name_lookup)
+    
     return h2h_stats
 
 def build_player_overall_stats(df):
@@ -76,6 +86,12 @@ def build_player_overall_stats(df):
     Returns:
         DataFrame with aggregate statistics per player
     """
+    # Create player name lookup first
+    name_lookup = pd.concat([
+        df[['winner_id', 'winner_name']].rename(columns={'winner_id': 'player_id', 'winner_name': 'name'}),
+        df[['loser_id', 'loser_name']].rename(columns={'loser_id': 'player_id', 'loser_name': 'name'})
+    ]).drop_duplicates('player_id').set_index('player_id')['name']
+    
     # Initialize stats for winners and losers
     winner_stats = df.groupby('winner_id').agg({
         'tourney_id': 'count',  # total matches won
@@ -123,6 +139,10 @@ def build_player_overall_stats(df):
     all_stats['avg_rank'] = (all_stats['avg_rank_when_winning'] * all_stats['matches_won'] + 
                             all_stats['avg_rank_when_losing'] * all_stats['matches_lost']) / all_stats['total_matches']
 
+    # Add player names using the lookup
+    all_stats = all_stats.reset_index().rename(columns={'index': 'player_id'})
+    all_stats['player_name'] = all_stats['player_id'].map(name_lookup)
+
     return all_stats
 
 def build_all_features(df, force_recompute=False):
@@ -139,24 +159,15 @@ def build_all_features(df, force_recompute=False):
     stores = get_feature_stores()
     
     # Handle head-to-head features
+    print("Building head-to-head features...")
+    h2h_features = build_head_to_head_features(df)
     with pd.HDFStore(stores['h2h']) as store:
-        if not force_recompute and '/features' in store:
-            print("Loading cached head-to-head features...")
-            h2h_features = store.get('/features')
-        else:
-            print("Building head-to-head features...")
-            h2h_features = build_head_to_head_features(df)
-            store.put('/features', h2h_features)
+        store.put('/features', h2h_features)
     
     # Handle player career statistics
+    print("Building player career statistics...")
+    player_stats = build_player_overall_stats(df)
     with pd.HDFStore(stores['player_stats']) as store:
-        if not force_recompute and '/features' in store:
-            print("Loading cached player career statistics...")
-            player_stats = store.get('/features')
-        else:
-            print("Building player career statistics...")
-            player_stats = build_player_overall_stats(df)
-            player_stats = player_stats.reset_index().rename(columns={'index': 'player_id'})
-            store.put('/features', player_stats)
+        store.put('/features', player_stats)
     
     return h2h_features, player_stats
