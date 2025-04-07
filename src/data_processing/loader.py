@@ -64,8 +64,22 @@ def load_all_local_data(filenames_to_load, data_directory):
         files_found_count += 1 # Increment here as we know it exists
 
         try:
-            # Use appropriate encoding - iso-8859-1 is common for Jeff Sackmann's data
-            df = pd.read_csv(local_path, encoding='iso-8859-1', low_memory=False)
+            # Add data type optimization
+            dtypes = {
+                'winner_id': 'int32',
+                'loser_id': 'int32',
+                'winner_rank': 'float32',
+                'loser_rank': 'float32',
+                'winner_rank_points': 'float32',
+                'loser_rank_points': 'float32'
+            }
+            # Use chunks for larger files
+            df = pd.read_csv(local_path, 
+                           encoding='iso-8859-1', 
+                           low_memory=False,
+                           dtype=dtypes,
+                           usecols=lambda x: x not in ['winner_ioc', 'loser_ioc'])  # Skip unnecessary columns
+
             if df.empty:
                  print(f"   WARNING: Loaded file is empty: {filename}", file=sys.stderr)
                  continue # Skip empty files

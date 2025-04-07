@@ -32,10 +32,17 @@ def main():
 
     # --- Step 1: Load Data ---
     print("\n--- Step 1: Loading Data ---")
-    # Call the function from the loader module, passing arguments from config
+    
+    # Check if data directory exists and has files
+    if not os.path.exists(config.RAW_DATA_DIR) or not os.listdir(config.RAW_DATA_DIR):
+        print("\nERROR: Data directory empty or missing.", file=sys.stderr)
+        print("Please run 'python src/data_processing/download_data.py' first.", file=sys.stderr)
+        return
+
+    # Load the data
     master_df = loader.load_all_local_data(
-        config.FILENAMES_TO_LOAD,       # Get the list of filenames from config
-        config.RAW_DATA_DIR             # Get the raw data directory path from config
+        config.FILENAMES_TO_LOAD,
+        config.RAW_DATA_DIR
     )
 
     # Check if loading was successful before proceeding
@@ -52,24 +59,46 @@ def main():
     # --- End Step 1 ---
 
 
-    # --- Step 2: Preprocessing (Placeholder) ---
-    print("\n--- Step 2: Preprocessing Data (Placeholder) ---")
-    # Example: Call a preprocessing function (you'll create this later in src/data_processing/preprocessing.py)
-    # cleaned_df = preprocessing.clean_data(master_df)
-    cleaned_df = master_df # For now, just pass it through
-    print("Preprocessing steps would go here.")
+    # --- Step 2: Preprocessing ---
+    print("\n--- Step 2: Preprocessing Data ---")
+    try:
+        from src.data_processing.preprocessing import clean_data
+        cleaned_df = clean_data(master_df)
+        
+        if cleaned_df is None or len(cleaned_df) == 0:
+            print("ERROR: Preprocessing resulted in empty dataset!", file=sys.stderr)
+            return
+            
+        print("\n--- Data Quality Report ---")
+        print(f"Missing values remaining:")
+        print(cleaned_df.isnull().sum()[cleaned_df.isnull().sum() > 0])
+        print("\nDataset shape after cleaning:", cleaned_df.shape)
+        
+    except Exception as e:
+        print(f"ERROR: Preprocessing failed. Error: {e}", file=sys.stderr)
+        return
     print("--- End Step 2 ---")
-    # --- End Step 2 ---
 
 
-    # --- Step 3: Feature Engineering (Placeholder) ---
-    print("\n--- Step 3: Building Features (Placeholder) ---")
-    # Example: Call a feature engineering function (you'll create this later in src/features/build_features.py)
-    # features_df = build_features.build_all_features(cleaned_df)
-    features_df = cleaned_df # For now, just pass it through
-    print("Feature engineering steps would go here.")
+    # --- Step 3: Building Features ---
+    print("\n--- Step 3: Building Features ---")
+    try:
+        from src.features.build_features import build_all_features
+        
+        h2h_features, time_features = build_all_features(cleaned_df)
+        
+        print("\n--- Feature Statistics ---")
+        print(f"Head-to-head pairs created: {len(h2h_features):,}")
+        print(f"Career statistics created for {len(time_features):,} players")
+        
+        # Save features for later use
+        h2h_features.to_csv(os.path.join(config.PROCESSED_DATA_DIR, 'head_to_head_features.csv'), index=False)
+        time_features.to_csv(os.path.join(config.PROCESSED_DATA_DIR, 'player_career_features.csv'), index=False)
+        
+    except Exception as e:
+        print(f"ERROR: Feature engineering failed. Error: {e}", file=sys.stderr)
+        return
     print("--- End Step 3 ---")
-    # --- End Step 3 ---
 
 
     # --- Subsequent Steps (Placeholders) ---
