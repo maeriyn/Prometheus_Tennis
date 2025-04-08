@@ -78,96 +78,148 @@ def build_head_to_head_features(df):
 
 def build_player_overall_stats(df):
     """
-    Creates overall career statistics for each player.
+    Creates career statistics for each player.
     
     Args:
         df: DataFrame containing match data
         
     Returns:
-        DataFrame with aggregate statistics per player
+        DataFrame with one row per player containing career stats
     """
-    # Create player name lookup first
-    name_lookup = pd.concat([
-        df[['winner_id', 'winner_name']].rename(columns={'winner_id': 'player_id', 'winner_name': 'name'}),
-        df[['loser_id', 'loser_name']].rename(columns={'loser_id': 'player_id', 'loser_name': 'name'})
-    ]).drop_duplicates('player_id').set_index('player_id')['name']
+    # Create separate dataframes for wins and losses to calculate stats
+    wins = df[['winner_id', 'winner_name', 'surface', 'tourney_level',
+               'w_ace', 'w_df', 'w_svpt', 'w_1stIn', 'w_1stWon', 'w_2ndWon',
+               'w_SvGms', 'w_bpSaved', 'w_bpFaced']].copy()
+    losses = df[['loser_id', 'loser_name', 'surface', 'tourney_level',
+                 'l_ace', 'l_df', 'l_svpt', 'l_1stIn', 'l_1stWon', 'l_2ndWon',
+                 'l_SvGms', 'l_bpSaved', 'l_bpFaced']].copy()
     
-    # Initialize stats for winners and losers
-    winner_stats = df.groupby('winner_id').agg({
-        'tourney_id': 'count',  # total matches won
-        'winner_rank': 'mean',  # average rank when winning
-        'w_ace': 'mean',       # average aces per match
-        'w_df': 'mean',        # average double faults
-        'w_svpt': 'mean',      # average service points
-        'w_1stIn': 'mean',     # average first serves in
-        'w_1stWon': 'mean',    # average first serve points won
-        'w_2ndWon': 'mean',    # average second serve points won
-        'w_bpSaved': 'mean',   # average break points saved
-    }).rename(columns={
-        'tourney_id': 'matches_won',
-        'winner_rank': 'avg_rank_when_winning'
-    })
-
-    loser_stats = df.groupby('loser_id').agg({
-        'tourney_id': 'count',  # total matches lost
-        'loser_rank': 'mean',   # average rank when losing
-        'l_ace': 'mean',
-        'l_df': 'mean',
-        'l_svpt': 'mean',
-        'l_1stIn': 'mean',
-        'l_1stWon': 'mean',
-        'l_2ndWon': 'mean',
-        'l_bpSaved': 'mean'
-    }).rename(columns={
-        'tourney_id': 'matches_lost',
-        'loser_rank': 'avg_rank_when_losing'
-    })
-
-    # Combine winner and loser stats
-    all_stats = pd.merge(
-        winner_stats,
-        loser_stats,
-        left_index=True,
-        right_index=True,
-        suffixes=('_winning', '_losing'),
-        how='outer'
-    ).fillna(0)
-
-    # Calculate career metrics
-    all_stats['total_matches'] = all_stats['matches_won'] + all_stats['matches_lost']
-    all_stats['win_rate'] = all_stats['matches_won'] / all_stats['total_matches']
-    all_stats['avg_rank'] = (all_stats['avg_rank_when_winning'] * all_stats['matches_won'] + 
-                            all_stats['avg_rank_when_losing'] * all_stats['matches_lost']) / all_stats['total_matches']
-
-    # Add player names using the lookup
-    all_stats = all_stats.reset_index().rename(columns={'index': 'player_id'})
-    all_stats['player_name'] = all_stats['player_id'].map(name_lookup)
-
-    return all_stats
+    # Rename columns to common names
+    wins.columns = ['player_id', 'name', 'surface', 'level', 
+                   'aces', 'dfs', 'serve_pts', 'first_in', 'first_won',
+                   'second_won', 'serve_games', 'bp_saved', 'bp_faced']
+    losses.columns = wins.columns
+    
+    # Add win/loss column
+    wins['won'] = 1
+    losses['won'] = 0
+    
+    # Combine wins and losses
+    all_matches = pd.concat([wins, losses])
+    
+    # Group by player
+    stats = []
+    for player_id, player_matches in all_matches.groupby('player_id'):
+        matches_count = len(player_matches)
+        if matches_count < 1:
+            continue
+            
+        # Get player name from first match
+        player_name = player_matches['name'].iloc[0]
+            
+        # Basic info
+        player_stats = {
+            'player_id': player_id,
+            'player_name': player_name,  # Added player name
+            'matches_played': matches_count,
+            
+            # Overall win rate
+            'win_rate': player_matches['won'].mean(),
+            
+            # Surface win rates
+            'hard_win_rate': player_matches[player_matches['surface'] == 'Hard']['won'].mean(),
+            'clay_win_rate': player_matches[player_matches['surface'] == 'Clay']['won'].mean(),
+            'grass_win_rate': player_matches[player_matches['surface'] == 'Grass']['won'].mean(),
+            
+            # Tournament level win rates
+            'grand_slam_win_rate': player_matches[player_matches['level'] == 'G']['won'].mean(),
+            'masters_win_rate': player_matches[player_matches['level'] == 'M']['won'].mean(),
+            
+            # Serve stats
+            'first_serve_pct': player_matches['first_in'].sum() / player_matches['serve_pts'].sum(),
+            'first_serve_won_pct': player_matches['first_won'].sum() / player_matches['first_in'].sum(),
+            'second_serve_won_pct': (player_matches['second_won'].sum() / 
+                                   (player_matches['serve_pts'].sum() - player_matches['first_in'].sum())),
+            
+            # Ace and double fault rates (per service game)
+            'ace_rate': player_matches['aces'].sum() / player_matches['serve_games'].sum(),
+            'double_fault_rate': player_matches['dfs'].sum() / player_matches['serve_games'].sum(),
+            
+            # Return stats
+            'break_points_per_game': player_matches['bp_faced'].sum() / player_matches['serve_games'].sum(),
+            'break_point_save_pct': player_matches['bp_saved'].sum() / player_matches['bp_faced'].sum()
+        }
+        
+        # Handle division by zero cases
+        player_stats = {k: (v if not pd.isna(v) else 0) for k, v in player_stats.items()}
+        stats.append(player_stats)
+    
+    return pd.DataFrame(stats)
 
 def build_all_features(df, force_recompute=False):
-    """
-    Main function to build all feature sets.
-    
-    Args:
-        df: Clean DataFrame with match data
-        force_recompute: If True, recomputes all features even if cached
-        
-    Returns:
-        Tuple of (h2h_features, player_overall_stats)
-    """
+    """Builds and saves all feature sets"""
     stores = get_feature_stores()
     
-    # Handle head-to-head features
-    print("Building head-to-head features...")
-    h2h_features = build_head_to_head_features(df)
-    with pd.HDFStore(stores['h2h']) as store:
-        store.put('/features', h2h_features)
+    # Initialize variables
+    h2h = None
+    stats = None
     
-    # Handle player career statistics
-    print("Building player career statistics...")
-    player_stats = build_player_overall_stats(df)
-    with pd.HDFStore(stores['player_stats']) as store:
-        store.put('/features', player_stats)
-    
-    return h2h_features, player_stats
+    # Build head to head features
+    h2h_path = stores['h2h']
+    try:
+        if force_recompute or not h2h_path.exists():
+            print("Computing head-to-head features...")
+            h2h = build_head_to_head_features(df)
+            if h2h is not None and not h2h.empty:
+                with pd.HDFStore(h2h_path, mode='w') as store:
+                    store.put('h2h', h2h, format='fixed')  # Changed to fixed format
+                print("Head-to-head features saved successfully")
+        else:
+            try:
+                with pd.HDFStore(h2h_path, mode='r') as store:
+                    if '/h2h' in store:
+                        h2h = store.get('h2h')
+                    else:
+                        print("H2H data not found in store, recomputing...")
+                        h2h = build_head_to_head_features(df)
+                        with pd.HDFStore(h2h_path, mode='w') as store:
+                            store.put('h2h', h2h, format='fixed')
+            except Exception as e:
+                print(f"Error reading H2H store: {str(e)}, recomputing...")
+                h2h = build_head_to_head_features(df)
+                with pd.HDFStore(h2h_path, mode='w') as store:
+                    store.put('h2h', h2h, format='fixed')
+    except Exception as e:
+        print(f"Error in H2H feature computation: {str(e)}")
+        raise
+
+    # Build player stats features
+    stats_path = stores['player_stats']
+    try:
+        if force_recompute or not stats_path.exists():
+            print("Computing player stats features...")
+            stats = build_player_overall_stats(df)
+            if stats is not None and not stats.empty:
+                with pd.HDFStore(stats_path, mode='w') as store:
+                    store.put('player_stats', stats, format='fixed')  # Changed to fixed format
+                print("Player stats features saved successfully")
+        else:
+            try:
+                with pd.HDFStore(stats_path, mode='r') as store:
+                    if '/player_stats' in store:
+                        stats = store.get('player_stats')
+                    else:
+                        print("Player stats not found in store, recomputing...")
+                        stats = build_player_overall_stats(df)
+                        with pd.HDFStore(stats_path, mode='w') as store:
+                            store.put('player_stats', stats, format='fixed')
+            except Exception as e:
+                print(f"Error reading player stats store: {str(e)}, recomputing...")
+                stats = build_player_overall_stats(df)
+                with pd.HDFStore(stats_path, mode='w') as store:
+                    store.put('player_stats', stats, format='fixed')
+    except Exception as e:
+        print(f"Error in player stats computation: {str(e)}")
+        raise
+
+    return h2h, stats
