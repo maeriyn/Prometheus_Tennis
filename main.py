@@ -104,30 +104,30 @@ def main():
 
     # --- Step 4: Model Training ---
     print("\n--- Step 4: Model Training ---")
-    # try:
-    #     from src.models.train_model import prepare_training_data, train_gradient_boost, save_model
+    try:
+        from src.models.train_model import prepare_training_data, train_gradient_boost, save_model
         
-    #     # Prepare data
-    #     X, y, feature_cols = prepare_training_data(h2h_features, player_stats, recent_stats)
-    #     print(f"\nPrepared dataset shape: {X.shape}")
+        # Prepare data
+        X, y, feature_cols = prepare_training_data(h2h_features, player_stats, recent_stats)
+        print(f"\nPrepared dataset shape: {X.shape}")
         
-    #     # Train model
-    #     model_dir = os.path.join(config.MODEL_DIR, 'gradient_boost')
-    #     model, scaler, metrics = train_gradient_boost(X, y, model_dir)
+        # Train model
+        model_dir = os.path.join(config.MODEL_DIR, 'gradient_boost')
+        model, scaler, metrics = train_gradient_boost(X, y, model_dir)
         
-    #     # Print metrics
-    #     print("\n--- Model Performance ---")
-    #     print(f"Accuracy: {metrics['accuracy']:.4f}")
-    #     print(f"ROC AUC: {metrics['roc_auc']:.4f}")
-    #     print("\nClassification Report:")
-    #     print(metrics['classification_report'])
+        # Print metrics
+        print("\n--- Model Performance ---")
+        print(f"Accuracy: {metrics['accuracy']:.4f}")
+        print(f"ROC AUC: {metrics['roc_auc']:.4f}")
+        print("\nClassification Report:")
+        print(metrics['classification_report'])
         
-    #     # Save model artifacts
-    #     save_model(model, scaler, feature_cols, model_dir)
+        # Save model artifacts
+        save_model(model, scaler, feature_cols, model_dir)
         
-    # except Exception as e:
-    #     print(f"ERROR: Model training failed. Error: {e}", file=sys.stderr)
-    #     return
+    except Exception as e:
+        print(f"ERROR: Model training failed. Error: {e}", file=sys.stderr)
+        return
 
     print("\n" + "="*30)
     print(" Prometheus_Tennis Training Pipeline Completed Successfully ")
