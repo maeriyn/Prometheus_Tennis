@@ -108,7 +108,7 @@ def main():
         from src.models.train_model import prepare_training_data, train_gradient_boost, save_model
         
         # Prepare data
-        X, y, feature_cols = prepare_training_data(h2h_features, player_stats, recent_stats)
+        X, y, feature_cols = prepare_training_data(h2h_features, recent_stats)
         print(f"\nPrepared dataset shape: {X.shape}")
         
         # Train model

@@ -6,11 +6,17 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
 from .gradient_boost import GradientBoostModel
 
-def prepare_training_data(h2h_features, player_stats, recent_stats):
+def prepare_training_data(h2h_features, recent_stats):
     """Prepare data for model training"""
+    # Ensure required columns exist
+    required_columns = ['player1_id', 'player2_id']
+    for df, name in zip([h2h_features, recent_stats], ['h2h_features', 'recent_stats']):
+        for col in required_columns:
+            if col not in df.columns:
+                raise ValueError(f"Missing required column '{col}' in {name}")
+    
     # Combine features
-    X = pd.merge(h2h_features, player_stats, on=['player1_id', 'player2_id'], how='left')
-    X = pd.merge(X, recent_stats, on=['player1_id', 'player2_id'], how='left')
+    X = pd.merge(h2h_features, recent_stats, on=['player1_id', 'player2_id'], how='left')
     
     # Define target variable
     y = X['player1_won'].astype(int)
@@ -62,3 +68,15 @@ def save_model(model, feature_cols, model_dir):
     
     with open(os.path.join(model_dir, 'feature_names.txt'), 'w') as f:
         f.write('\n'.join(feature_cols))
+
+def train_gradient_boost(h2h_features, player_stats, recent_stats, model_params=None):
+    """
+    Train a gradient boosting model using the provided features and parameters.
+    """
+    # Prepare training data - ignore player_stats for now
+    X, y, feature_cols = prepare_training_data(h2h_features, recent_stats)
+    
+    # Train model
+    model, metrics = train_model(X, y, model_type='gradient_boost', model_params=model_params)
+    
+    return model, metrics, feature_cols
