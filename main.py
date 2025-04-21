@@ -87,15 +87,14 @@ def main():
         
         h2h_features, player_stats, recent_stats = build_all_features(cleaned_df)
         
+        # Save features for later use
+        h2h_features.to_csv(os.path.join(config.PROCESSED_DATA_DIR, 'head_to_head_with_names.csv'), index=False)
+        recent_stats.to_csv(os.path.join(config.PROCESSED_DATA_DIR, 'player_recent_stats_with_names.csv'), index=False)
+        
         print("\n--- Feature Statistics ---")
         print(f"Head-to-head pairs created: {len(h2h_features):,}")
         print(f"Career statistics created for {len(player_stats):,} players")
         print(f"Recent statistics created for {len(recent_stats):,} players")
-        
-        # Save features for later use
-        h2h_features.to_csv(os.path.join(config.PROCESSED_DATA_DIR, 'head_to_head_with_names.csv'), index=False)
-        player_stats.to_csv(os.path.join(config.PROCESSED_DATA_DIR, 'player_career_stats_with_names.csv'), index=False)
-        recent_stats.to_csv(os.path.join(config.PROCESSED_DATA_DIR, 'player_recent_stats_with_names.csv'), index=False)
         
     except Exception as e:
         print(f"ERROR: Feature engineering failed. Error: {e}", file=sys.stderr)
@@ -105,25 +104,20 @@ def main():
     # --- Step 4: Model Training ---
     print("\n--- Step 4: Model Training ---")
     try:
-        from src.models.train_model import prepare_training_data, train_gradient_boost, save_model
+        from src.models.train_model import train_gradient_boost
         
-        # Prepare data
-        X, y, feature_cols = prepare_training_data(h2h_features, recent_stats)
-        print(f"\nPrepared dataset shape: {X.shape}")
+        # Train model passing player_stats directly as career_stats
+        model, metrics, feature_cols = train_gradient_boost(
+            h2h_features=h2h_features,
+            recent_stats=recent_stats,
+            career_stats=player_stats
+        )
         
-        # Train model
-        model_dir = os.path.join(config.MODEL_DIR, 'gradient_boost')
-        model, scaler, metrics = train_gradient_boost(X, y, model_dir)
-        
-        # Print metrics
         print("\n--- Model Performance ---")
         print(f"Accuracy: {metrics['accuracy']:.4f}")
         print(f"ROC AUC: {metrics['roc_auc']:.4f}")
         print("\nClassification Report:")
         print(metrics['classification_report'])
-        
-        # Save model artifacts
-        save_model(model, scaler, feature_cols, model_dir)
         
     except Exception as e:
         print(f"ERROR: Model training failed. Error: {e}", file=sys.stderr)
